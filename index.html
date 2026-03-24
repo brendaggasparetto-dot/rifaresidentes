@@ -8,6 +8,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  
   const firebaseConfig = {
     apiKey: "AIzaSyBkf-iRSkXntSERzft_b16zT1VeJly1c6A",
     authDomain: "rifa--residentes.firebaseapp.com",
@@ -17,20 +18,26 @@
     messagingSenderId: "844916919267",
     appId: "1:844916919267:web:ac52339a5ac778e7bcaed6"
   };
+
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
   const PIX_KEY = "094.736.199-52";
-  const WHATSAPP_NUMBER = "554199826640";
+  const WHATSAPP_NUMBER = "554199826640"; 
   const PRICE_PER = 15;
   const TOTAL_NUMS = 200;
+
   let reservedData = {};
   let selectedNums = new Set();
+
+  // Caminho do banco de dados
   const rifaRef = ref(db, "rifa/numeros");
+
   onValue(rifaRef, (snapshot) => {
     reservedData = snapshot.val() || {};
     buildGrid();
     updateUI();
   });
+
   function buildGrid() {
     const grid = document.getElementById("numbersGrid");
     grid.innerHTML = "";
@@ -49,12 +56,15 @@
     }
     updateCounters();
   }
+
   function toggleNum(n, btn) {
     if (selectedNums.has(n)) { selectedNums.delete(n); btn.classList.remove("selected"); }
     else { selectedNums.add(n); btn.classList.add("selected"); }
     updateUI();
   }
+
   function updateUI() { updateCounters(); updateSelDisplay(); updateTotal(); updateBtn(); }
+
   function updateCounters() {
     const taken = Object.keys(reservedData).length;
     const sel = selectedNums.size;
@@ -62,28 +72,33 @@
     document.getElementById("countSel").textContent = sel;
     document.getElementById("countTaken").textContent = taken;
   }
+
   function updateSelDisplay() {
     const box = document.getElementById("selDisplay");
     if (selectedNums.size === 0) { box.innerHTML = '<span class="empty-hint">Nenhum número selecionado ainda…</span>'; return; }
     const sorted = [...selectedNums].sort((a,b) => a-b);
     box.innerHTML = sorted.map(n => `<span class="sel-tag" onclick="removeNumGlobal(${n})">${n<10?"0"+n:n} ✕</span>`).join("");
   }
+
   function updateTotal() {
     document.getElementById("totalVal").textContent = "R$ " + (selectedNums.size * PRICE_PER).toFixed(2).replace(".",",");
   }
+
   function updateBtn() { document.getElementById("btnCheckout").disabled = selectedNums.size === 0; }
+
   window.removeNumGlobal = function(n) {
     selectedNums.delete(n);
     const btn = document.querySelector(`.num-btn[data-num="${n}"]`);
     if (btn) btn.classList.remove("selected");
     updateUI();
   };
+
   window.openModal = async function() {
     const name = document.getElementById("inputName").value.trim();
     const phone = document.getElementById("inputPhone").value.trim();
     if (!name) { showToast("⚠️ Digite seu nome!"); return; }
     if (!phone || phone.replace(/\D/g,"").length < 10) { showToast("⚠️ Digite um WhatsApp válido!"); return; }
-    if (selectedNums.size === 0) { showToast("Selecione ao menos um número!"); return; }
+
     const snap = await get(rifaRef);
     const current = snap.val() || {};
     const conflict = [...selectedNums].filter(n => current[String(n)]);
@@ -92,54 +107,36 @@
       conflict.forEach(n => { selectedNums.delete(n); });
       updateUI(); buildGrid(); return;
     }
-    const timestamp = new Date().toLocaleString("pt-BR");
+
     try {
       for (const n of selectedNums) {
-        await set(ref(db, "rifa/numeros/" + n), { name, phone, timestamp });
+        await set(ref(db, "rifa/numeros/" + n), { name, phone, timestamp: new Date().toLocaleString("pt-BR") });
       }
     } catch(e) { showToast("❌ Erro ao salvar. Tente novamente."); return; }
+
     const sorted = [...selectedNums].sort((a,b)=>a-b);
     const numsStr = sorted.map(n=>n<10?"0"+n:n).join(", ");
     const total = (selectedNums.size * PRICE_PER).toFixed(2).replace(".",",");
+
     document.getElementById("summaryBox").innerHTML =
-      `<strong>Nome:</strong> ${name}<br>` +
-      `<strong>WhatsApp:</strong> ${phone}<br>` +
-      `<strong>Números:</strong> ${numsStr}<br>` +
-      `<strong>Total:</strong> R$ ${total}`;
-    const msg = encodeURIComponent(
-      "🎟️ *Rifa - Residentes em Resistência*\n" +
-      "━━━━━━━━━━━━━━━\n" +
-      "👤 Nome: " + name + "\n" +
-      "📱 WhatsApp: " + phone + "\n" +
-      "🔢 Números: " + numsStr + "\n" +
-      "💰 Total: R$ " + total + "\n" +
-      "━━━━━━━━━━━━━━━\n" +
-      "Segue comprovante do Pix! ✅"
-    );
+      `<strong>Nome:</strong> ${name}<br><strong>Números:</strong> ${numsStr}<br><strong>Total:</strong> R$ ${total}`;
+
+    const msg = encodeURIComponent(`🎟️ *Rifa - Residentes em Resistência*\n👤 Nome: ${name}\n🔢 Números: ${numsStr}\n💰 Total: R$ ${total}\n\nSegue comprovante do Pix! ✅`);
     document.getElementById("wppBtn").href = "https://wa.me/" + WHATSAPP_NUMBER + "?text=" + msg;
-    selectedNums.clear();
-    document.getElementById("inputName").value = "";
-    document.getElementById("inputPhone").value = "";
-    updateUI();
+
     document.getElementById("pixModal").classList.add("open");
+    selectedNums.clear();
+    updateUI();
   };
+
   window.closeModal = () => document.getElementById("pixModal").classList.remove("open");
   window.copyPix = () => navigator.clipboard.writeText(PIX_KEY).then(() => showToast("✅ Chave Pix copiada!"));
+
   function showToast(msg) {
     const t = document.getElementById("toast");
     t.textContent = msg; t.classList.add("show");
     setTimeout(() => t.classList.remove("show"), 2800);
   }
-  window.showToast = showToast;
-  document.addEventListener("DOMContentLoaded", () => {
-    document.getElementById("inputPhone").addEventListener("input", function() {
-      let v = this.value.replace(/\D/g,"").slice(0,11);
-      if (v.length > 6) v = `(${v.slice(0,2)}) ${v.slice(2,7)}-${v.slice(7)}`;
-      else if (v.length > 2) v = `(${v.slice(0,2)}) ${v.slice(2)}`;
-      else if (v.length) v = `(${v}`;
-      this.value = v;
-    });
-  });
 </script>
 <style>
   :root {
@@ -155,274 +152,131 @@
   }
   .page {
     max-width: 520px; margin: 0 auto; background: var(--cream); border-radius: 18px;
-    box-shadow: 0 8px 40px rgba(61,32,8,0.25), inset 0 1px 0 rgba(255,255,255,0.6);
-    overflow: hidden; border: 2px solid var(--warm);
+    box-shadow: 0 8px 40px rgba(61,32,8,0.25); overflow: hidden; border: 2px solid var(--warm);
   }
   .header {
     background: linear-gradient(160deg, #f0e0c8 0%, #e0c89a 60%, #c8a060 100%);
-    padding: 28px 20px 20px; text-align: center; border-bottom: 3px solid var(--gold); position: relative;
+    padding: 28px 20px; text-align: center; border-bottom: 3px solid var(--gold);
   }
-  .header::before {
-    content: ''; position: absolute; inset: 0; pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8922a' fill-opacity='0.08'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-  }
-  .prize-badge {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: linear-gradient(135deg, #fff8ee, #fdeac8); border: 1.5px solid var(--gold);
-    border-radius: 30px; padding: 8px 18px; margin-top: 14px;
-    font-family: 'Playfair Display', serif; font-style: italic; font-size: 1rem;
-    color: var(--brown); box-shadow: 0 2px 8px rgba(200,146,42,0.2);
-  }
-  .firebase-status {
-    display: flex; align-items: center; justify-content: center; gap: 6px;
-    padding: 7px; font-size: 0.72rem; color: #9a6a40;
-    background: #fdf8f0; border-bottom: 1px solid var(--warm);
-  }
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; transition: background 0.3s; }
-  .status-dot.online { background: #4caf50; box-shadow: 0 0 6px #4caf5088; }
-  .status-dot.offline { background: #f44336; }
-  .basket-section {
-    background: linear-gradient(180deg, #e8d5b7 0%, #f0e4ce 100%);
-    padding: 18px 20px 14px; text-align: center; border-bottom: 2px dashed var(--warm);
-  }
-  .basket-emoji { font-size: 3.5rem; display: block; filter: drop-shadow(0 4px 8px rgba(100,60,10,0.2)); animation: sway 4s ease-in-out infinite; }
-  @keyframes sway { 0%,100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
-  .items-list { display: flex; justify-content: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .item-tag { background: white; border: 1px solid var(--warm); border-radius: 20px; padding: 3px 12px; font-size: 0.78rem; color: var(--brown); }
-  .price-bar { display: flex; align-items: center; justify-content: center; gap: 10px; background: var(--brown); padding: 10px; color: #fff8ee; font-size: 0.95rem; }
-  .price-bar strong { font-size: 1.3rem; color: var(--selected); font-family: 'Playfair Display', serif; }
-  .about-section {
-    background: linear-gradient(160deg, #3d2008 0%, #6b3518 60%, #7c4f2a 100%);
-    padding: 24px 22px; position: relative; overflow: hidden;
-  }
-  .about-section::before {
-    content: ''; position: absolute; inset: 0; pointer-events: none;
-    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-  }
-  .about-label { font-size: 0.72rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold); margin-bottom: 8px; font-family: 'Lora', serif; }
-  .about-title { font-family: 'Playfair Display', serif; font-size: 1.4rem; color: #fff8ee; margin-bottom: 14px; font-style: italic; text-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-  .about-text { font-size: 0.85rem; color: #e8d5b7; line-height: 1.7; margin-bottom: 10px; }
-  .about-text strong { color: #fdeac8; }
-  .about-text em { color: var(--selected); font-style: italic; }
-  .about-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
-  .about-tag { background: rgba(255,255,255,0.1); border: 1px solid rgba(200,146,42,0.4); border-radius: 20px; padding: 4px 12px; font-size: 0.75rem; color: #fdeac8; font-family: 'Lora', serif; backdrop-filter: blur(4px); }
-  .legend { display: flex; justify-content: center; gap: 18px; padding: 12px 16px; background: #fdf8f2; border-bottom: 1px solid var(--warm); flex-wrap: wrap; }
-  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--brown); }
-  .legend-dot { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid rgba(0,0,0,0.1); }
-  .grid-section { padding: 16px 14px; }
-  .grid-title { text-align: center; font-family: 'Playfair Display', serif; font-style: italic; color: var(--brown); font-size: 1rem; margin-bottom: 12px; }
-  .numbers-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; }
+  .header h1 { font-family: 'Playfair Display', serif; color: var(--dark); font-size: 2.2rem; }
+  .header h1 em { font-style: italic; font-size: 1.4rem; color: var(--brown); font-family: 'Lora', serif; display: block; }
+  .prize-badge { display: inline-flex; align-items: center; gap: 8px; background: white; border: 1.5px solid var(--gold); border-radius: 30px; padding: 8px 18px; margin-top: 14px; font-style: italic; color: var(--brown); }
+
+  .basket-section { background: #f0e4ce; padding: 20px; text-align: center; border-bottom: 2px dashed var(--warm); }
+  .basket-emoji { font-size: 3.5rem; display: block; }
+  .item-tag { background: white; border: 1px solid var(--warm); border-radius: 20px; padding: 3px 12px; font-size: 0.78rem; color: var(--brown); display: inline-block; margin: 2px; }
+
+  .price-bar { display: flex; align-items: center; justify-content: center; gap: 10px; background: var(--brown); padding: 12px; color: #fff8ee; }
+  .price-bar strong { font-size: 1.4rem; color: var(--selected); font-family: 'Playfair Display', serif; }
+
+  .about-section { background: #3d2008; padding: 25px; color: #fff8ee; }
+  .about-title { font-family: 'Playfair Display', serif; font-size: 1.4rem; color: var(--gold); margin-bottom: 15px; font-style: italic; }
+  .about-text { font-size: 0.85rem; line-height: 1.7; margin-bottom: 10px; color: #e8d5b7; }
+
+  .numbers-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; padding: 15px; }
   .num-btn {
-    aspect-ratio: 1; border-radius: 8px; border: 1.5px solid #d4b896; background: var(--available);
-    font-family: 'Lora', serif; font-size: 0.75rem; font-weight: 600; color: var(--dark);
-    cursor: pointer; transition: all 0.18s ease;
-    box-shadow: 0 2px 4px rgba(100,60,10,0.08), inset 0 1px 0 rgba(255,255,255,0.8);
-    position: relative; overflow: hidden;
+    aspect-ratio: 1; border-radius: 6px; border: 1.5px solid #d4b896; background: var(--available);
+    font-size: 0.8rem; font-weight: 600; color: var(--dark); cursor: pointer; transition: 0.2s;
   }
-  .num-btn:hover:not(.taken):not(.selected) { background: #fff3d4; border-color: var(--gold); transform: translateY(-2px); box-shadow: 0 4px 10px rgba(200,146,42,0.25); }
-  .num-btn.selected { background: linear-gradient(135deg, #f5d060, #e8a820); border-color: var(--gold); color: var(--dark); transform: translateY(-2px) scale(1.08); box-shadow: 0 4px 12px rgba(200,146,42,0.4); z-index: 2; }
-  .num-btn.taken { background: var(--taken); border-color: #a0b888; color: #6a8050; cursor: not-allowed; opacity: 0.75; }
-  .num-btn.taken::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.05) 3px, rgba(0,0,0,0.05) 6px); }
-  .counter-bar { display: flex; justify-content: center; gap: 20px; padding: 12px; background: #fdf0dc; border-top: 1px solid var(--warm); border-bottom: 1px solid var(--warm); }
-  .counter-item { text-align: center; }
-  .counter-num { display: block; font-family: 'Playfair Display', serif; font-size: 1.5rem; color: var(--brown); }
-  .counter-label { font-size: 0.7rem; color: #9a6a40; }
-  .checkout { padding: 20px 18px; background: #fdfaf6; }
-  .checkout h3 { font-family: 'Playfair Display', serif; font-style: italic; color: var(--brown); font-size: 1.15rem; margin-bottom: 16px; text-align: center; }
-  .selected-numbers-display { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; min-height: 36px; background: #fff8ee; border: 1.5px dashed var(--warm); border-radius: 10px; padding: 8px; align-items: center; }
-  .sel-tag { background: linear-gradient(135deg, #f5d060, #e8a820); border-radius: 20px; padding: 3px 10px; font-size: 0.82rem; font-weight: 600; color: var(--dark); cursor: pointer; transition: transform 0.1s; }
-  .sel-tag:hover { transform: scale(1.1); }
-  .empty-hint { font-size: 0.8rem; color: #bba080; font-style: italic; }
-  .form-group { margin-bottom: 14px; }
-  .form-group label { display: block; font-size: 0.82rem; color: var(--brown); margin-bottom: 5px; font-weight: 600; }
-  .form-group input { width: 100%; padding: 10px 14px; border: 1.5px solid var(--warm); border-radius: 10px; font-family: 'Lora', serif; font-size: 0.9rem; background: white; color: var(--dark); transition: border-color 0.2s; outline: none; }
-  .form-group input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(200,146,42,0.15); }
-  .total-display { background: linear-gradient(135deg, #fff3d4, #fde8a0); border: 1.5px solid var(--gold); border-radius: 12px; padding: 14px 18px; margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; }
-  .total-display span { font-size: 0.9rem; color: var(--brown); }
-  .total-display strong { font-family: 'Playfair Display', serif; font-size: 1.5rem; color: var(--dark); }
-  .btn-checkout { width: 100%; padding: 15px; background: linear-gradient(135deg, var(--brown), #5a2f0a); color: #fff8ee; border: none; border-radius: 12px; font-family: 'Playfair Display', serif; font-size: 1.1rem; cursor: pointer; transition: all 0.2s; box-shadow: 0 4px 15px rgba(61,32,8,0.3); }
-  .btn-checkout:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(61,32,8,0.4); }
-  .btn-checkout:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(61,32,8,0.7); z-index: 100; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+  .num-btn.selected { background: var(--selected); border-color: var(--gold); transform: scale(1.05); }
+  .num-btn.taken { background: var(--taken); cursor: not-allowed; text-decoration: line-through; opacity: 0.6; }
+
+  .counter-bar { display: flex; justify-content: center; gap: 20px; padding: 12px; background: #fdf0dc; border-top: 1px solid var(--warm); }
+  .counter-item { text-align: center; font-size: 0.7rem; color: #9a6a40; }
+  .counter-num { display: block; font-family: 'Playfair Display', serif; font-size: 1.4rem; color: var(--brown); }
+
+  .checkout { padding: 20px; background: #fdfaf6; }
+  .form-group { margin-bottom: 15px; }
+  .form-group input { width: 100%; padding: 12px; border: 1.5px solid var(--warm); border-radius: 10px; font-family: 'Lora', serif; outline: none; }
+  .btn-checkout { width: 100%; padding: 16px; background: var(--brown); color: white; border: none; border-radius: 12px; font-family: 'Playfair Display', serif; font-size: 1.1rem; cursor: pointer; }
+  .btn-checkout:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); align-items: center; justify-content: center; z-index: 100; padding: 20px; backdrop-filter: blur(4px); }
   .modal-overlay.open { display: flex; }
-  .modal { background: var(--cream); border-radius: 18px; padding: 28px 24px; max-width: 360px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.4); animation: popIn 0.3s cubic-bezier(0.34,1.56,0.64,1); text-align: center; border: 2px solid var(--gold); }
-  @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-  .modal-icon { font-size: 3rem; margin-bottom: 8px; }
-  .modal h2 { font-family: 'Playfair Display', serif; color: var(--dark); font-size: 1.4rem; margin-bottom: 8px; }
-  .modal p { font-size: 0.88rem; color: var(--brown); line-height: 1.6; margin-bottom: 14px; }
-  .pix-box { background: white; border: 2px dashed var(--gold); border-radius: 12px; padding: 14px; margin: 14px 0; }
-  .pix-label { font-size: 0.75rem; color: #9a6a40; margin-bottom: 4px; }
-  .pix-key { font-family: 'Playfair Display', serif; font-size: 1.1rem; color: var(--dark); word-break: break-all; }
-  .copy-btn { background: var(--gold); color: white; border: none; border-radius: 8px; padding: 8px 20px; font-family: 'Lora', serif; font-size: 0.85rem; cursor: pointer; margin-top: 8px; transition: background 0.2s; }
-  .copy-btn:hover { background: var(--brown); }
-  .summary-box { background: #fdf0dc; border-radius: 10px; padding: 12px; margin-top: 12px; font-size: 0.83rem; color: var(--brown); text-align: left; line-height: 1.8; }
-  .summary-box strong { color: var(--dark); }
-  .whatsapp-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 13px; background: linear-gradient(135deg, #25d366, #128c7e); color: white; border: none; border-radius: 12px; font-family: 'Lora', serif; font-size: 0.95rem; font-weight: 600; cursor: pointer; margin-top: 14px; transition: all 0.2s; box-shadow: 0 4px 12px rgba(37,211,102,0.3); text-decoration: none; }
-  .whatsapp-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(37,211,102,0.4); }
-  .close-modal { background: transparent; border: 1.5px solid var(--warm); border-radius: 8px; padding: 8px 20px; color: var(--brown); font-family: 'Lora', serif; font-size: 0.85rem; cursor: pointer; margin-top: 10px; transition: all 0.2s; }
-  .close-modal:hover { background: var(--warm); }
-  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--dark); color: #fff8ee; padding: 10px 22px; border-radius: 30px; font-size: 0.85rem; font-family: 'Lora', serif; transition: transform 0.3s ease; z-index: 200; white-space: nowrap; }
+  .modal { background: var(--cream); border-radius: 18px; padding: 30px; max-width: 360px; width: 100%; text-align: center; border: 2px solid var(--gold); }
+  .pix-box { background: white; border: 2px dashed var(--gold); border-radius: 12px; padding: 15px; margin: 15px 0; }
+  .pix-key { font-family: 'Playfair Display', serif; font-size: 1.2rem; font-weight: bold; color: var(--dark); margin: 5px 0; }
+  .whatsapp-btn { display: block; background: #25d366; color: white; padding: 15px; text-decoration: none; border-radius: 12px; font-weight: bold; margin-top: 10px; box-shadow: 0 4px 12px rgba(37,211,102,0.3); }
+  
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: #333; color: white; padding: 10px 20px; border-radius: 30px; transition: 0.3s; z-index: 200; }
   .toast.show { transform: translateX(-50%) translateY(0); }
-  .footer { text-align: center; padding: 14px; font-size: 0.72rem; color: var(--brown); border-top: 1px dashed var(--warm); background: #fdf8f2; }
-  .footer span { font-family: 'Playfair Display', serif; font-style: italic; }
-  .loading-overlay { position: fixed; inset: 0; background: rgba(245,239,230,0.95); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 300; gap: 14px; }
-  .loading-overlay.hidden { display: none; }
-  .loading-spinner { width: 40px; height: 40px; border: 3px solid var(--warm); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-text { font-family: 'Playfair Display', serif; font-style: italic; color: var(--brown); font-size: 1rem; }
+  .sel-tag { background: var(--selected); padding: 2px 8px; border-radius: 15px; margin: 2px; display: inline-block; cursor: pointer; font-size: 0.8rem; font-weight: bold; }
+
+  /* Estilo da caixa de contato no modal */
+  .contact-box { background:#e8f5e9; border:1.5px solid #81c784; border-radius:12px; padding:14px; margin-top:14px; text-align:center; font-family:'Lora',serif; font-size:0.9rem; color:#2e7d32; line-height:1.7; }
 </style>
 </head>
 <body>
-<div class="loading-overlay" id="loadingOverlay">
-  <div class="loading-spinner"></div>
-  <div class="loading-text">Carregando a rifa…</div>
-</div>
+
 <div class="page">
   <div class="header">
-    <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px;">
-      <span style="font-size:2.2rem;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.18));">🧬</span>
-      <img src="https://flagcdn.com/w80/ar.png" alt="Argentina" style="height:36px;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,0.22);border:1px solid rgba(255,255,255,0.5);" />
-    </div>
-    <h1 style="font-size:2.8rem;font-family:'Playfair Display',serif;color:var(--dark);line-height:1.08;text-shadow:2px 3px 0 rgba(255,255,255,0.55),0 6px 18px rgba(61,32,8,0.18);">
-      Residentes
-      <em style="display:block;font-style:italic;font-size:1.5rem;color:var(--brown);font-family:'Lora',serif;font-weight:400;margin-top:3px;letter-spacing:0.06em;">em Resistência</em>
-    </h1>
-    <div style="width:70%;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:12px auto 10px;"></div>
-    <div class="prize-badge">🎁 Prêmio: Cesta de Café da Manhã</div>
+    <div style="font-size:2.2rem; margin-bottom:10px;">🧬 🇦🇷</div>
+    <h1>Residentes <em>em Resistência</em></h1>
+    <div class="prize-badge">🎁 Prêmio: Cesta de Café da Manhã Completa</div>
   </div>
-  <div class="firebase-status">
-    <div class="status-dot" id="statusDot"></div>
-    <span id="statusText">Conectando…</span>
-  </div>
+
   <div class="basket-section">
-    <span class="basket-emoji">☕🥐🍓</span>
+    <span class="basket-emoji">☕🥐🍓🧀🍞</span>
     <div class="items-list">
-      <span class="item-tag">🥖 Pão Australiano & Integral</span>
-      <span class="item-tag">🥨 Grissinis</span>
-      <span class="item-tag">🍞 Torradas Multicereais</span>
-      <span class="item-tag">🧀 Queijo Brie</span>
-      <span class="item-tag">🧀 Cream Cheese</span>
-      <span class="item-tag">🧈 Manteiga</span>
-      <span class="item-tag">🥩 Salame Italiano</span>
-      <span class="item-tag">🍓 Geleia de Frutas Vermelhas</span>
-      <span class="item-tag">🍑 Frutas da Estação</span>
-      <span class="item-tag">🍫 Chocolates Artesanais</span>
-      <span class="item-tag">🍪 Biscoito Caseiro</span>
-      <span class="item-tag">☕ Café Especial</span>
-      <span class="item-tag">🍵 Chá Premium</span>
-      <span class="item-tag">🥤 Sucos Integrais</span>
-      <span class="item-tag">🎁 Xícara de Porcelana exclusiva</span>
+      <span class="item-tag">Pão Australiano</span> <span class="item-tag">Queijo Brie</span>
+      <span class="item-tag">Salame Italiano</span> <span class="item-tag">Geleia de Frutas</span>
+      <span class="item-tag">Café Especial</span> <span class="item-tag">Xícara Exclusiva</span>
     </div>
   </div>
-  <div class="price-bar">🎟️ Cada número por apenas <strong>R$ 15,00</strong></div>
+
+  <div class="price-bar">Cada número por apenas <strong>R$ 15,00</strong></div>
+
   <div class="about-section">
-    <div class="about-label">✦ Por que estamos rifando? ✦</div>
-    <h2 class="about-title">Uma viagem pelo conhecimento</h2>
-    <p class="about-text">
-      Somos residentes da área de genética forense e estamos arrecadando fundos para participar das
-      <strong>XXIII Jornadas da Sociedad Argentina de Genética Forense (SAGF)</strong> —
-      um dos maiores eventos da área na América Latina, que acontece de
-      <strong>10 a 12 de junho de 2026</strong> em <strong>Resistencia, Chaco, Argentina</strong>.
-    </p>
-    <p class="about-text">
-      São três dias intensos de aprendizado prático, trocas com especialistas internacionais e debates
-      sobre o que há de mais atual na ciência forense. Para nós, é uma oportunidade única de crescer
-      profissionalmente e trazer esse conhecimento de volta ao Brasil.
-    </p>
-    <p class="about-text">
-      <em>Sua rifa não é só um número — é um investimento em ciência e em justiça.</em> 💙
-    </p>
-    <div class="about-tags">
-      <span class="about-tag">🧬 SAGF 2026</span>
-      <span class="about-tag">🇦🇷 Resistencia, Chaco</span>
-      <span class="about-tag">📅 10–12 Jun 2026</span>
-      <span class="about-tag">⚖️ Genética Forense</span>
-    </div>
+    <h2 class="about-title">Nossa Jornada na Argentina</h2>
+    <p class="about-text">Estamos arrecadando fundos para as XXIII Jornadas da SAGF em junho de 2026. Sua rifa ajuda a financiar nossa capacitação na área de genética forense. 💙</p>
   </div>
-  <div class="legend">
-    <div class="legend-item"><div class="legend-dot" style="background:var(--available);border-color:#d4b896;"></div>Disponível</div>
-    <div class="legend-item"><div class="legend-dot" style="background:linear-gradient(135deg,#f5d060,#e8a820);"></div>Selecionado</div>
-    <div class="legend-item"><div class="legend-dot" style="background:var(--taken);border-color:#a0b888;"></div>Reservado</div>
-  </div>
-  <div class="grid-section">
-    <div class="grid-title">✨ Escolha seu(s) número(s) da sorte ✨</div>
-    <div class="numbers-grid" id="numbersGrid"></div>
-  </div>
+
+  <div class="numbers-grid" id="numbersGrid"></div>
+
   <div class="counter-bar">
-    <div class="counter-item"><span class="counter-num" id="countAvail">—</span><span class="counter-label">disponíveis</span></div>
-    <div class="counter-item"><span class="counter-num" id="countSel">0</span><span class="counter-label">selecionados</span></div>
-    <div class="counter-item"><span class="counter-num" id="countTaken">—</span><span class="counter-label">reservados</span></div>
+    <div class="counter-item"><span class="counter-num" id="countAvail">—</span>livres</div>
+    <div class="counter-item"><span class="counter-num" id="countSel">0</span>selecionados</div>
+    <div class="counter-item"><span class="counter-num" id="countTaken">—</span>reservados</div>
   </div>
+
   <div class="checkout">
-    <h3>📋 Finalizar Reserva</h3>
-    <div class="selected-numbers-display" id="selDisplay"><span class="empty-hint">Nenhum número selecionado ainda…</span></div>
+    <div id="selDisplay" style="margin-bottom:15px; min-height: 30px;"></div>
     <div class="form-group">
-      <label>👤 Seu nome completo</label>
-      <input type="text" id="inputName" placeholder="Ex: Maria da Silva" />
+      <input type="text" id="inputName" placeholder="Seu Nome Completo" />
     </div>
     <div class="form-group">
-      <label>📱 WhatsApp (com DDD)</label>
-      <input type="tel" id="inputPhone" placeholder="Ex: (41) 98765-4321" />
+      <input type="tel" id="inputPhone" placeholder="Seu WhatsApp" />
     </div>
-    <div class="total-display">
-      <span>Total a pagar:</span>
-      <strong id="totalVal">R$ 0,00</strong>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+      <span>Total:</span> <strong id="totalVal" style="font-size:1.5rem; color: var(--brown);">R$ 0,00</strong>
     </div>
     <button class="btn-checkout" id="btnCheckout" disabled onclick="openModal()">🎟️ Reservar & Ver Pix</button>
   </div>
-  <div class="footer">Organizado por <span>Residentes em Resistência 🧬</span><br>Dúvidas? Fale pelo WhatsApp após reservar.</div>
 </div>
+
 <div class="modal-overlay" id="pixModal">
   <div class="modal">
-    <div class="modal-icon">🎉</div>
-    <h2>Números reservados!</h2>
-    <p>Faça o Pix abaixo para confirmar. Depois envie o comprovante pelo WhatsApp.</p>
+    <div style="font-size:3rem;">🎉</div>
+    <h2>Reserva confirmada!</h2>
+    <p>Para garantir seus números, faça o Pix e envie o comprovante.</p>
     <div class="pix-box">
-      <div class="pix-label">Chave Pix (CPF)</div>
+      <div style="font-size:0.7rem; color: #9a6a40;">Chave Pix (CPF)</div>
       <div class="pix-key">094.736.199-52</div>
-      <button class="copy-btn" onclick="copyPix()">📋 Copiar chave</button>
+      <button onclick="copyPix()" style="cursor:pointer; background: var(--gold); color: white; border: none; padding: 5px 15px; border-radius: 5px;">📋 Copiar chave</button>
     </div>
-    <div class="summary-box" id="summaryBox"></div>
+    <div id="summaryBox" style="text-align:left; font-size:0.85rem; background: #fdf0dc; padding: 10px; border-radius: 8px;"></div>
     
-    <a id="wppBtn" class="whatsapp-btn" target="_blank">
-      Enviar comprovante pelo WhatsApp 📱
-    </a>
-    
-    <button class="close-modal" onclick="closeModal()">✕ Fechar</button>
+    <div class="contact-box">
+      📱 <strong>WhatsApp para comprovante:</strong><br>
+      <span style="font-size:1.2rem; font-weight:700;">(41) 9982-6640</span>
+    </div>
+
+    <a id="wppBtn" class="whatsapp-btn" target="_blank">Enviar comprovante pelo WhatsApp 📱</a>
+    <button onclick="closeModal()" style="margin-top:15px; background:none; border:none; text-decoration:underline; cursor:pointer; color: #888;">Fechar janela</button>
   </div>
 </div>
+
 <div class="toast" id="toast"></div>
-<script>
-  let firstLoad = true;
-  const observer = new MutationObserver(() => {
-    const grid = document.getElementById("numbersGrid");
-    if (grid && grid.children.length > 0 && firstLoad) {
-      firstLoad = false;
-      document.getElementById("loadingOverlay").classList.add("hidden");
-      document.getElementById("statusDot").classList.add("online");
-      document.getElementById("statusText").textContent = "✅ Conectado — números atualizados em tempo real";
-      observer.disconnect();
-    }
-  });
-  observer.observe(document.getElementById("numbersGrid"), { childList: true });
-  setTimeout(() => {
-    if (firstLoad) {
-      firstLoad = false;
-      document.getElementById("loadingOverlay").classList.add("hidden");
-      document.getElementById("statusDot").classList.add("offline");
-      document.getElementById("statusText").textContent = "⚠️ Configure o Firebase para ativar o tempo real";
-      const grid = document.getElementById("numbersGrid");
-      if (grid.children.length === 0) {
-        for (let i = 1; i <= 200; i++) {
-          const btn = document.createElement("button");
-          btn.className = "num-btn";
-          btn.textContent = i < 10 ? "0"+i : i;
-          btn.onclick = () => window.showToast && window.showToast("⚠️ Configure o Firebase primeiro!");
-          grid.appendChild(btn);
-        }
-      }
-    }
-  }, 5000);
-</script>
+
 </body>
 </html>
