@@ -182,3 +182,104 @@
   .numbers-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; padding: 15px; }
   .num-btn {
     aspect-ratio: 1; border-radius: 6px; border: 1.5px solid #d4b896; background: var(--available);
+    font-size: 0.8rem; font-weight: 600; color: var(--dark); cursor: pointer; transition: 0.2s;
+  }
+  .num-btn.selected { background: var(--selected); border-color: var(--gold); transform: scale(1.05); }
+  .num-btn.taken { background: var(--taken); cursor: not-allowed; text-decoration: line-through; opacity: 0.6; }
+
+  .counter-bar { display: flex; justify-content: center; gap: 20px; padding: 12px; background: #fdf0dc; border-top: 1px solid var(--warm); }
+  .counter-item { text-align: center; font-size: 0.7rem; color: #9a6a40; }
+  .counter-num { display: block; font-family: 'Playfair Display', serif; font-size: 1.4rem; color: var(--brown); }
+
+  .checkout { padding: 20px; background: #fdfaf6; }
+  .form-group { margin-bottom: 15px; }
+  .form-group label { display: block; font-size: 0.8rem; color: var(--brown); margin-bottom: 5px; font-weight: 600; }
+  .form-group input { width: 100%; padding: 12px; border: 1.5px solid var(--warm); border-radius: 10px; font-family: 'Lora', serif; outline: none; }
+  .btn-checkout { width: 100%; padding: 16px; background: var(--brown); color: white; border: none; border-radius: 12px; font-family: 'Playfair Display', serif; font-size: 1.1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+  .btn-checkout:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); align-items: center; justify-content: center; z-index: 100; padding: 20px; backdrop-filter: blur(4px); }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--cream); border-radius: 18px; padding: 30px; max-width: 360px; width: 100%; text-align: center; border: 2px solid var(--gold); }
+  .pix-box { background: white; border: 2px dashed var(--gold); border-radius: 12px; padding: 15px; margin: 15px 0; }
+  .pix-key { font-family: 'Playfair Display', serif; font-size: 1.2rem; font-weight: bold; color: var(--dark); margin: 5px 0; }
+  .whatsapp-btn { display: block; background: #25d366; color: white; padding: 15px; text-decoration: none; border-radius: 12px; font-weight: bold; margin-top: 10px; box-shadow: 0 4px 12px rgba(37,211,102,0.3); }
+  
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: #333; color: white; padding: 10px 20px; border-radius: 30px; transition: 0.3s; z-index: 200; }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .sel-tag { background: var(--selected); padding: 2px 8px; border-radius: 15px; margin: 2px; display: inline-block; cursor: pointer; font-size: 0.8rem; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="header">
+    <div style="font-size:2.2rem; margin-bottom:10px;">🧬 🇦🇷</div>
+    <h1>Residentes <em>em Resistência</em></h1>
+    <div class="prize-badge">🎁 Prêmio: Cesta de Café da Manhã Completa</div>
+  </div>
+
+  <div class="basket-section">
+    <span class="basket-emoji">☕🥐🍓🧀🍞</span>
+    <div class="items-list">
+      <span class="item-tag">Pão Australiano</span> <span class="item-tag">Queijo Brie</span>
+      <span class="item-tag">Salame Italiano</span> <span class="item-tag">Geleia de Frutas</span>
+      <span class="item-tag">Café Especial</span> <span class="item-tag">Xícara Exclusiva</span>
+    </div>
+  </div>
+
+  <div class="price-bar">Cada número por apenas <strong>R$ 15,00</strong></div>
+
+  <div class="about-section">
+    <h2 class="about-title">Nossa Jornada na Argentina</h2>
+    <p class="about-text">
+      Estamos arrecadando fundos para as <strong>XXIII Jornadas da SAGF</strong> em junho de 2026.
+      Sua rifa ajuda a financiar nossa capacitação na área de genética forense. Ciência é justiça! 💙
+    </p>
+  </div>
+
+  <div class="numbers-grid" id="numbersGrid"></div>
+
+  <div class="counter-bar">
+    <div class="counter-item"><span class="counter-num" id="countAvail">—</span>livres</div>
+    <div class="counter-item"><span class="counter-num" id="countSel">0</span>selecionados</div>
+    <div class="counter-item"><span class="counter-num" id="countTaken">—</span>reservados</div>
+  </div>
+
+  <div class="checkout">
+    <div id="selDisplay" style="margin-bottom:15px; min-height: 30px;"></div>
+    <div class="form-group">
+      <label>Seu nome completo</label>
+      <input type="text" id="inputName" placeholder="Ex: Maria Silva" />
+    </div>
+    <div class="form-group">
+      <label>WhatsApp</label>
+      <input type="tel" id="inputPhone" placeholder="(41) 99999-9999" />
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+      <span>Total:</span> <strong id="totalVal" style="font-size:1.5rem; color: var(--brown);">R$ 0,00</strong>
+    </div>
+    <button class="btn-checkout" id="btnCheckout" disabled onclick="openModal()">🎟️ Reservar & Ver Pix</button>
+  </div>
+</div>
+
+<div class="modal-overlay" id="pixModal">
+  <div class="modal">
+    <div style="font-size:3rem;">🎉</div>
+    <h2>Reserva confirmada!</h2>
+    <p>Para garantir seus números, faça o Pix e envie o comprovante.</p>
+    <div class="pix-box">
+      <div style="font-size:0.7rem; color: #9a6a40;">Chave Pix (CPF)</div>
+      <div class="pix-key">094.736.199-52</div>
+      <button onclick="copyPix()" style="cursor:pointer; background: var(--gold); color: white; border: none; padding: 5px 15px; border-radius: 5px;">📋 Copiar chave</button>
+    </div>
+    <div id="summaryBox" style="text-align:left; font-size:0.85rem; background: #fdf0dc; padding: 10px; border-radius: 8px;"></div>
+    <a id="wppBtn" class="whatsapp-btn" target="_blank">Enviar comprovante pelo WhatsApp 📱</a>
+    <button onclick="closeModal()" style="margin-top:15px; background:none; border:none; text-decoration:underline; cursor:pointer; color: #888;">Fechar janela</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+</body>
+</html>
